@@ -1,6 +1,7 @@
 import time
 import os
 import sqlite3
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 import discord
@@ -14,14 +15,28 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 
 # Load environment variables and config
+load_dotenv()
 from config import config  # Assumes your config code is in config.py
 
-# Discord settings (these still come from environment variables)
+# Discord settings
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 
 # Flag for generating a draft reply (proposal)
 GENERATE_REPLY_DRAFT = True  # Set to False to disable draft proposal generation
+
+# ============================== LOGGING SETUP ==============================
+LOG_DIR = config.LOG_DIR or "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(LOG_DIR, "scraper.log")),
+        logging.StreamHandler()
+    ]
+)
+logging.info("Scraper module started.")
 
 # ============================== DATABASE ==============================
 DB_FILE = "leads.db"
@@ -43,6 +58,7 @@ def init_db():
     )
     conn.commit()
     conn.close()
+    logging.info("Database initialized.")
 
 def save_lead(platform, post_id, title, content, link):
     """Save a new lead to the database if it doesn't already exist."""
@@ -54,8 +70,10 @@ def save_lead(platform, post_id, title, content, link):
             (platform, post_id, title, content, link)
         )
         conn.commit()
+        logging.info(f"New lead saved: {platform} | {post_id}")
         return True  # New lead added
     except sqlite3.IntegrityError:
+        logging.info(f"Duplicate lead found, skipping: {platform} | {post_id}")
         return False  # Lead already exists
     finally:
         conn.close()
@@ -64,7 +82,7 @@ def save_lead(platform, post_id, title, content, link):
 def generate_proposal(lead_details):
     """
     Generate a dynamic proposal (draft reply) message based on lead details.
-    For a real-world scenario, you might use templating or even NLP to tailor this further.
+    Modify the template as needed.
     """
     proposal = (
         f"Hello,\n\n"
@@ -81,6 +99,7 @@ def prepare_reply(lead_details):
     The draft reply is not automatically sent.
     """
     proposal = generate_proposal(lead_details)
+    logging.info(f"Draft reply generated for {lead_details['platform']} post {lead_details['post_id']}")
     print("\n[Draft Reply]")
     print(f"Platform: {lead_details['platform']} | Post ID: {lead_details['post_id']}")
     print("Draft Proposal:")
@@ -91,18 +110,17 @@ def prepare_reply(lead_details):
 def get_driver():
     """Setup and return a Selenium Chrome WebDriver using config settings."""
     options = Options()
-    # Only enable headless mode if set in config
     if config.HEADLESS_MODE:
         options.add_argument("--headless")
     options.add_argument("--start-maximized")
-    # Use the configured Chrome profile if provided
     if config.CHROME_PROFILE_PATH:
         options.add_argument(f"user-data-dir={config.CHROME_PROFILE_PATH}")
     service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
+    logging.info("Chrome WebDriver initialized.")
+    return driver
 
 # ============================== SCRAPERS ==============================
-# Keywords for freelance job posts (customize as needed)
 FREELANCE_KEYWORDS = [
     "looking for a developer", "hiring a python expert", "need automation help",
     "freelance programmer", "remote developer job", "AI developer wanted"
@@ -110,113 +128,133 @@ FREELANCE_KEYWORDS = [
 
 def scrape_twitter():
     """Scrapes Twitter for freelance job leads."""
+    logging.info("Starting Twitter scraping...")
     driver = get_driver()
     driver.get("https://twitter.com/explore")
     time.sleep(5)
 
     for keyword in FREELANCE_KEYWORDS:
-        search_box = driver.find_element(By.XPATH, "//input[@aria-label='Search query']")
-        search_box.clear()
-        search_box.send_keys(keyword)
-        search_box.send_keys(Keys.RETURN)
-        time.sleep(5)
+        try:
+            search_box = driver.find_element(By.XPATH, "//input[@aria-label='Search query']")
+            search_box.clear()
+            search_box.send_keys(keyword)
+            search_box.send_keys(Keys.RETURN)
+            time.sleep(5)
 
-        posts = driver.find_elements(By.XPATH, "//article")
-        for post in posts:
-            try:
-                content = post.text.strip()
-                link = post.find_element(By.TAG_NAME, "a").get_attribute("href")
-                post_id = link.split("/")[-1]
+            posts = driver.find_elements(By.XPATH, "//article")
+            for post in posts:
+                try:
+                    content = post.text.strip()
+                    link = post.find_element(By.TAG_NAME, "a").get_attribute("href")
+                    post_id = link.split("/")[-1]
 
-                if save_lead("Twitter", post_id, keyword, content, link):
-                    # Send Discord alert
-                    bot.loop.create_task(send_discord_alert("Twitter", keyword, content, link))
-                    # Generate a draft reply for manual follow-up if enabled
-                    if GENERATE_REPLY_DRAFT:
-                        prepare_reply({
-                            "platform": "Twitter",
-                            "post_id": post_id,
-                            "title": keyword,
-                            "content": content,
-                            "link": link
-                        })
-            except Exception:
-                continue
+                    if save_lead("Twitter", post_id, keyword, content, link):
+                        bot.loop.create_task(send_discord_alert("Twitter", keyword, content, link))
+                        if GENERATE_REPLY_DRAFT:
+                            prepare_reply({
+                                "platform": "Twitter",
+                                "post_id": post_id,
+                                "title": keyword,
+                                "content": content,
+                                "link": link
+                            })
+                except Exception as inner_ex:
+                    logging.error(f"Error processing a Twitter post: {inner_ex}")
+                    continue
+        except Exception as ex:
+            logging.error(f"Error in Twitter scraping for keyword '{keyword}': {ex}")
+            continue
 
     driver.quit()
+    logging.info("Twitter scraping complete.")
 
 def scrape_linkedin():
     """Scrapes LinkedIn for freelance job leads."""
+    logging.info("Starting LinkedIn scraping...")
     driver = get_driver()
     driver.get("https://www.linkedin.com/feed/")
     time.sleep(5)
 
     for keyword in FREELANCE_KEYWORDS:
-        search_url = f"https://www.linkedin.com/search/results/content/?keywords={keyword.replace(' ', '%20')}"
-        driver.get(search_url)
-        time.sleep(5)
+        try:
+            search_url = f"https://www.linkedin.com/search/results/content/?keywords={keyword.replace(' ', '%20')}"
+            driver.get(search_url)
+            time.sleep(5)
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        posts = soup.find_all("div", class_="update")
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            posts = soup.find_all("div", class_="update")
 
-        for post in posts:
-            try:
-                content = post.get_text(strip=True)
-                link = post.find("a")["href"]
-                post_id = link.split("/")[-1]
+            for post in posts:
+                try:
+                    content = post.get_text(strip=True)
+                    link = post.find("a")["href"]
+                    post_id = link.split("/")[-1]
 
-                if save_lead("LinkedIn", post_id, keyword, content, link):
-                    bot.loop.create_task(send_discord_alert("LinkedIn", keyword, content, link))
-                    if GENERATE_REPLY_DRAFT:
-                        prepare_reply({
-                            "platform": "LinkedIn",
-                            "post_id": post_id,
-                            "title": keyword,
-                            "content": content,
-                            "link": link
-                        })
-            except Exception:
-                continue
+                    if save_lead("LinkedIn", post_id, keyword, content, link):
+                        bot.loop.create_task(send_discord_alert("LinkedIn", keyword, content, link))
+                        if GENERATE_REPLY_DRAFT:
+                            prepare_reply({
+                                "platform": "LinkedIn",
+                                "post_id": post_id,
+                                "title": keyword,
+                                "content": content,
+                                "link": link
+                            })
+                except Exception as inner_ex:
+                    logging.error(f"Error processing a LinkedIn post: {inner_ex}")
+                    continue
+        except Exception as ex:
+            logging.error(f"Error in LinkedIn scraping for keyword '{keyword}': {ex}")
+            continue
 
     driver.quit()
+    logging.info("LinkedIn scraping complete.")
 
 def scrape_reddit():
     """Scrapes Reddit for freelance job leads."""
+    logging.info("Starting Reddit scraping...")
     driver = get_driver()
     driver.get("https://www.reddit.com/")
     time.sleep(5)
 
     for keyword in FREELANCE_KEYWORDS:
-        search_url = f"https://www.reddit.com/search/?q={keyword.replace(' ', '%20')}&type=link"
-        driver.get(search_url)
-        time.sleep(5)
+        try:
+            search_url = f"https://www.reddit.com/search/?q={keyword.replace(' ', '%20')}&type=link"
+            driver.get(search_url)
+            time.sleep(5)
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        posts = soup.find_all("a", {"data-click-id": "body"})
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            posts = soup.find_all("a", {"data-click-id": "body"})
 
-        for post in posts:
-            try:
-                content = post.get_text(strip=True)
-                link = post["href"]
-                post_id = link.split("/")[-2]
+            for post in posts:
+                try:
+                    content = post.get_text(strip=True)
+                    link = post["href"]
+                    post_id = link.split("/")[-2]
 
-                if save_lead("Reddit", post_id, keyword, content, link):
-                    bot.loop.create_task(send_discord_alert("Reddit", keyword, content, link))
-                    if GENERATE_REPLY_DRAFT:
-                        prepare_reply({
-                            "platform": "Reddit",
-                            "post_id": post_id,
-                            "title": keyword,
-                            "content": content,
-                            "link": link
-                        })
-            except Exception:
-                continue
+                    if save_lead("Reddit", post_id, keyword, content, link):
+                        bot.loop.create_task(send_discord_alert("Reddit", keyword, content, link))
+                        if GENERATE_REPLY_DRAFT:
+                            prepare_reply({
+                                "platform": "Reddit",
+                                "post_id": post_id,
+                                "title": keyword,
+                                "content": content,
+                                "link": link
+                            })
+                except Exception as inner_ex:
+                    logging.error(f"Error processing a Reddit post: {inner_ex}")
+                    continue
+        except Exception as ex:
+            logging.error(f"Error in Reddit scraping for keyword '{keyword}': {ex}")
+            continue
 
     driver.quit()
+    logging.info("Reddit scraping complete.")
 
 def scrape_upwork():
     """Scrapes Upwork for freelance job listings."""
+    logging.info("Starting Upwork scraping...")
     driver = get_driver()
     driver.get("https://www.upwork.com/nx/jobs/search/?q=python")
     time.sleep(5)
@@ -241,10 +279,12 @@ def scrape_upwork():
                         "content": content,
                         "link": link
                     })
-        except Exception:
+        except Exception as ex:
+            logging.error(f"Error processing an Upwork job: {ex}")
             continue
 
     driver.quit()
+    logging.info("Upwork scraping complete.")
 
 # ============================== DISCORD ALERT ==============================
 intents = discord.Intents.default()
@@ -263,19 +303,17 @@ async def send_discord_alert(platform, title, content, link):
     embed.set_footer(text="Freelancer Lead Finder Bot")
 
     await channel.send(embed=embed)
+    logging.info(f"Discord alert sent for {platform} | {title}")
 
 # ============================== MAIN FUNCTION ==============================
 def run_scrapers():
     """Runs all the scrapers sequentially."""
-    print("\n🚀 Searching for freelance jobs...")
-    
+    logging.info("Starting scraper cycle...")
     scrape_twitter()
     scrape_linkedin()
     scrape_reddit()
     scrape_upwork()
-
-    print("✅ Search complete. Waiting for next cycle...")
-    # Use the interval from config (convert minutes to seconds)
+    logging.info("Scraper cycle complete. Waiting for next cycle...")
     time.sleep(config.SCRAPE_INTERVAL * 60)
 
 # ============================== EXECUTION ==============================
