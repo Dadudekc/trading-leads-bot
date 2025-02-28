@@ -13,13 +13,15 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 
-# Load environment variables
-load_dotenv()
+# Load environment variables and config
+from config import config  # Assumes your config code is in config.py
+
+# Discord settings (these still come from environment variables)
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 
-# Set flag for generating a draft reply (proposal)
-GENERATE_REPLY_DRAFT = True  # Set to False if you don't want a draft reply generated
+# Flag for generating a draft reply (proposal)
+GENERATE_REPLY_DRAFT = True  # Set to False to disable draft proposal generation
 
 # ============================== DATABASE ==============================
 DB_FILE = "leads.db"
@@ -87,14 +89,20 @@ def prepare_reply(lead_details):
 
 # ============================== SELENIUM SETUP ==============================
 def get_driver():
-    """Setup and return a Selenium Chrome WebDriver."""
+    """Setup and return a Selenium Chrome WebDriver using config settings."""
     options = Options()
-    options.add_argument("--headless")  # Run in headless mode
+    # Only enable headless mode if set in config
+    if config.HEADLESS_MODE:
+        options.add_argument("--headless")
     options.add_argument("--start-maximized")
+    # Use the configured Chrome profile if provided
+    if config.CHROME_PROFILE_PATH:
+        options.add_argument(f"user-data-dir={config.CHROME_PROFILE_PATH}")
     service = Service(ChromeDriverManager().install())
     return webdriver.Chrome(service=service, options=options)
 
 # ============================== SCRAPERS ==============================
+# Keywords for freelance job posts (customize as needed)
 FREELANCE_KEYWORDS = [
     "looking for a developer", "hiring a python expert", "need automation help",
     "freelance programmer", "remote developer job", "AI developer wanted"
@@ -267,7 +275,8 @@ def run_scrapers():
     scrape_upwork()
 
     print("✅ Search complete. Waiting for next cycle...")
-    time.sleep(1800)  # Runs every 30 minutes
+    # Use the interval from config (convert minutes to seconds)
+    time.sleep(config.SCRAPE_INTERVAL * 60)
 
 # ============================== EXECUTION ==============================
 if __name__ == "__main__":
