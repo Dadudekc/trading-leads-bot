@@ -13,6 +13,15 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
+      LINKEDIN_PASSWORD: ${{ secrets.LINKEDIN_PASSWORD }}
+      SEEKINGALPHA_EMAIL: ${{ secrets.SEEKINGALPHA_EMAIL }}
+      SEEKINGALPHA_PASSWORD: ${{ secrets.SEEKINGALPHA_PASSWORD }}
+      ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+      ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+      CHROME_PROFILE_PATH: ${{ secrets.CHROME_PROFILE_PATH }}
+
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v3
