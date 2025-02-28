@@ -1,6 +1,7 @@
 import time
 import os
 import sqlite3
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 import discord
@@ -23,6 +24,18 @@ DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 # Instead of auto applying, generate a draft reply for manual follow-up
 GENERATE_REPLY_DRAFT = True
 
+# ============================== LOGGING SETUP ==============================
+LOG_DIR = config.LOG_DIR or "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(LOG_DIR, "scraper.log")),
+        logging.StreamHandler()
+    ]
+)
+
 # ============================== DATABASE ==============================
 DB_FILE = "leads.db"
 
@@ -44,6 +57,7 @@ def init_db():
     )
     conn.commit()
     conn.close()
+    logging.info("Database initialized.")
 
 def save_lead(platform, post_id, title, content, link):
     """Save a new lead to the database if it doesn't already exist."""
@@ -55,8 +69,10 @@ def save_lead(platform, post_id, title, content, link):
             (platform, post_id, title, content, link)
         )
         conn.commit()
+        logging.info(f"New lead saved: {platform} | {post_id}")
         return True  # New lead added
     except sqlite3.IntegrityError:
+        logging.info(f"Duplicate lead found, skipping: {platform} | {post_id}")
         return False  # Lead already exists
     finally:
         conn.close()
@@ -68,6 +84,7 @@ def mark_draft_generated(post_id):
     cursor.execute("UPDATE leads SET draft_generated=1 WHERE post_id=?", (post_id,))
     conn.commit()
     conn.close()
+    logging.info(f"Draft marked for lead: {post_id}")
 
 # ============================== DRAFT REPLY MODULE ==============================
 def generate_proposal(lead_details):
@@ -90,6 +107,7 @@ def prepare_reply(lead_details):
     The draft reply is not automatically sent.
     """
     proposal = generate_proposal(lead_details)
+    logging.info(f"Draft reply generated for {lead_details['platform']} post {lead_details['post_id']}")
     print("\n[Draft Reply]")
     print(f"Platform: {lead_details['platform']} | Post ID: {lead_details['post_id']}")
     print("Draft Proposal:")
@@ -107,7 +125,9 @@ def get_driver():
     if config.CHROME_PROFILE_PATH:
         options.add_argument(f"user-data-dir={config.CHROME_PROFILE_PATH}")
     service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(service=service, options=options)
+    logging.info("Chrome WebDriver initialized.")
+    return driver
 
 # ============================== SCRAPERS ==============================
 FREELANCE_KEYWORDS = [
@@ -147,13 +167,14 @@ def scrape_twitter():
                                 "link": link
                             })
                 except Exception as inner_ex:
-                    print(f"Error processing a Twitter post: {inner_ex}")
+                    logging.error(f"Error processing a Twitter post: {inner_ex}")
                     continue
         except Exception as ex:
-            print(f"Error in Twitter scraping for keyword '{keyword}': {ex}")
+            logging.error(f"Error in Twitter scraping for keyword '{keyword}': {ex}")
             continue
 
     driver.quit()
+    logging.info("Twitter scraping complete.")
 
 def scrape_linkedin():
     """Scrapes LinkedIn for freelance job leads."""
@@ -187,13 +208,14 @@ def scrape_linkedin():
                                 "link": link
                             })
                 except Exception as inner_ex:
-                    print(f"Error processing a LinkedIn post: {inner_ex}")
+                    logging.error(f"Error processing a LinkedIn post: {inner_ex}")
                     continue
         except Exception as ex:
-            print(f"Error in LinkedIn scraping for keyword '{keyword}': {ex}")
+            logging.error(f"Error in LinkedIn scraping for keyword '{keyword}': {ex}")
             continue
 
     driver.quit()
+    logging.info("LinkedIn scraping complete.")
 
 def scrape_reddit():
     """Scrapes Reddit for freelance job leads."""
@@ -227,13 +249,14 @@ def scrape_reddit():
                                 "link": link
                             })
                 except Exception as inner_ex:
-                    print(f"Error processing a Reddit post: {inner_ex}")
+                    logging.error(f"Error processing a Reddit post: {inner_ex}")
                     continue
         except Exception as ex:
-            print(f"Error in Reddit scraping for keyword '{keyword}': {ex}")
+            logging.error(f"Error in Reddit scraping for keyword '{keyword}': {ex}")
             continue
 
     driver.quit()
+    logging.info("Reddit scraping complete.")
 
 def scrape_upwork():
     """Scrapes Upwork for freelance job listings."""
@@ -262,10 +285,11 @@ def scrape_upwork():
                         "link": link
                     })
         except Exception as ex:
-            print(f"Error processing an Upwork job: {ex}")
+            logging.error(f"Error processing an Upwork job: {ex}")
             continue
 
     driver.quit()
+    logging.info("Upwork scraping complete.")
 
 # ============================== DISCORD ALERT ==============================
 intents = discord.Intents.default()
@@ -284,18 +308,19 @@ async def send_discord_alert(platform, title, content, link):
     embed.set_footer(text="Freelancer Lead Finder Bot")
 
     await channel.send(embed=embed)
+    logging.info(f"Discord alert sent for {platform} | {title}")
 
 # ============================== MAIN FUNCTION ==============================
 def run_scrapers():
     """Runs all the scrapers sequentially."""
-    print("\n🚀 Searching for freelance jobs...")
+    logging.info("Starting scrapers...")
     
     scrape_twitter()
     scrape_linkedin()
     scrape_reddit()
     scrape_upwork()
 
-    print("✅ Search complete. Waiting for next cycle...")
+    logging.info("Scraping cycle complete. Waiting for next cycle...")
     # Use the interval from config (minutes to seconds)
     time.sleep(config.SCRAPE_INTERVAL * 60)
 
