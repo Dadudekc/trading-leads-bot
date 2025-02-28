@@ -48,5 +48,3 @@ This project is licensed under the MIT License – free to use and modify.
 💬 Have questions or ideas? Join the FreeRideInvestor community!
 
 	Built for traders, by traders. Automate. Analyze. Profit. 💰
-
-Save this as `README.md` in the root directory of your repository, and you’re set. 🚀
