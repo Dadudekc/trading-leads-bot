@@ -34,6 +34,10 @@ python twitter_scraper.py --test
 🔹 Optimize Execution – Enhance performance for running at scale.
 🔹 Automate Insights – Implement AI-driven sentiment analysis for better trading signals.
 🔹 Expand Data Sources – Integrate Reddit, StockTwits, financial news, and more.
+🔹 Containerize Deployment – Provide a Docker setup for easy installation and updates.
+🔹 Scheduled Scraping – Use cron or Celery workers to run the scrapers automatically.
+🔹 Real-Time Dashboard – Expand the Flask dashboard with charts and filtering.
+🔹 Multi-Channel Alerts – Support Telegram and email notifications in addition to Discord.
 
 🤝 Contributing
 

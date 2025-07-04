@@ -17,6 +17,18 @@ class Config:
             "email": os.getenv("REDDIT_USERNAME", ""),
             "password": os.getenv("REDDIT_PASSWORD", ""),
         },
+        "facebook": {
+            "email": os.getenv("FACEBOOK_EMAIL", ""),
+            "password": os.getenv("FACEBOOK_PASSWORD", ""),
+        },
+        "tiktok": {
+            "email": os.getenv("TIKTOK_EMAIL", ""),
+            "password": os.getenv("TIKTOK_PASSWORD", ""),
+        },
+        "quora": {
+            "email": os.getenv("QUORA_EMAIL", ""),
+            "password": os.getenv("QUORA_PASSWORD", ""),
+        },
         "stocktwits": {
             "email": os.getenv("STOCKTWITS_EMAIL", ""),
             "password": os.getenv("STOCKTWITS_PASSWORD", ""),
