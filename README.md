@@ -1,4 +1,4 @@
-# 🚀 FreeRideInvestor Web Scraper & Automation Suite  
+# 🚀 free-ride-investor Web Scraper & Automation Suite  
 
 ## 📌 Overview  
 This repository contains a **Python-based web scraping and automation framework** designed to collect, analyze, and process financial data from social media and web sources. It integrates **Selenium**, **BeautifulSoup**, and **Pandas** to extract real-time trading insights, automate research, and enhance decision-making.  
@@ -18,8 +18,8 @@ This repository contains a **Python-based web scraping and automation framework*
 
 1️⃣ **Clone the Repository**  
 ```sh
-git clone https://github.com/dadudekc/FreeRideInvestor-Scraper.git
-cd FreeRideInvestor-Scraper
+git clone https://github.com/dadudekc/free-ride-investor-Scraper.git
+cd free-ride-investor-Scraper
 
 2️⃣ Install Dependencies
 
@@ -49,6 +49,6 @@ This project is licensed under the MIT License – free to use and modify.
 
 🔗 Connect
 
-💬 Have questions or ideas? Join the FreeRideInvestor community!
+💬 Have questions or project-ideas? Join the free-ride-investor community!
 
 	Built for traders, by traders. Automate. Analyze. Profit. 💰
