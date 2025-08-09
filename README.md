@@ -49,6 +49,6 @@ This project is licensed under the MIT License – free to use and modify.
 
 🔗 Connect
 
-💬 Have questions or project-ideas? Join the free-ride-investor community!
+💬 Have questions or project-project-ideas? Join the free-ride-investor community!
 
 	Built for traders, by traders. Automate. Analyze. Profit. 💰
